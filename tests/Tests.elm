@@ -17,10 +17,32 @@ testCsv source exp decoder =
                 Expect.fail ("fail to decode: " ++ s)
 
 
+testCsvWithOptions : Options -> String -> List a -> Decoder a -> (() -> Expectation)
+testCsvWithOptions options source exp decoder =
+    \_ ->
+        case CsvDecode.runWithOptions options decoder source of
+            Ok actual ->
+                Expect.equal exp actual
+
+            Err s ->
+                Expect.fail ("fail to decode: " ++ s)
+
+
 testCsvFail : String -> Decoder a -> (() -> Expectation)
 testCsvFail source decoder =
     \_ ->
         case CsvDecode.run decoder source of
+            Ok actual ->
+                Expect.fail ("unexpectedly succeeded: " ++ toString actual)
+
+            Err _ ->
+                Expect.pass
+
+
+testCsvWithOptionsFail : Options -> String -> Decoder a -> (() -> Expectation)
+testCsvWithOptionsFail options source decoder =
+    \_ ->
+        case CsvDecode.runWithOptions options decoder source of
             Ok actual ->
                 Expect.fail ("unexpectedly succeeded: " ++ toString actual)
 
@@ -181,6 +203,34 @@ suite =
                     (index 10
                         |> andThen succeed
                     )
+            ]
+        , describe "runWithOptions"
+            [ test "works with custom separator" <|
+                testCsvWithOptions
+                    { separator = ";"
+                    , noHeader = False
+                    }
+                    "1;2;3\na;b;c"
+                    [ "b" ]
+                <|
+                    index 1
+            , test "works with noHeader option" <|
+                testCsvWithOptions
+                    { separator = ","
+                    , noHeader = True
+                    }
+                    "a,b,c\nd,e,f"
+                    [ "b", "e" ]
+                <|
+                    index 1
+            , test "works with noHeader option 2" <|
+                testCsvWithOptionsFail
+                    { separator = ","
+                    , noHeader = True
+                    }
+                    "a,b,c\nd,e,f"
+                <|
+                    field "dummy"
             ]
         ]
 

@@ -285,13 +285,22 @@ defaultOptions =
 runWithOptions : Options -> Decoder a -> String -> Result String (List a)
 runWithOptions options decoder source =
     let
+        realSource =
+            if options.noHeader then
+                "dummy\n" ++ source
+            else
+                source
+
         csv =
-            Csv.parseWith options.separator source
+            Csv.parseWith options.separator realSource
 
         header =
-            csv.headers
-                |> List.indexedMap (\i colName -> ( colName, i ))
-                |> Dict.fromList
+            if options.noHeader then
+                Dict.empty
+            else
+                csv.headers
+                    |> List.indexedMap (\i colName -> ( colName, i ))
+                    |> Dict.fromList
 
         items =
             csv.records
