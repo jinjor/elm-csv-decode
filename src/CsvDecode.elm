@@ -50,6 +50,7 @@ type Error
     | ColumnNotFoundInBody Int Int (Maybe String)
     | InvalidDataType Int String
       -- TODO: column index (and name) is available in most cases
+    | AmbiguousField Int String
     | Fail Int String
 
 
@@ -97,42 +98,20 @@ field key =
         )
 
 
-formatError : Error -> String
-formatError e =
-    case e of
-        ColumnNotFoundInHeader rowIndex colName ->
-            "column '"
-                ++ colName
-                ++ "' does not exist in header in record["
-                ++ toString rowIndex
-                ++ "]"
+fieldsAfter : String -> Decoder (Dict String String)
+fieldsAfter key =
+    Decoder
+        (\header rowIndex item ->
+            Debug.crash "not implemented yet."
+        )
 
-        ColumnNotFoundInBody rowIndex colIndex colName ->
-            "column["
-                ++ toString colIndex
-                ++ "]"
-                ++ (case colName of
-                        Just name ->
-                            " namely '" ++ name ++ "'"
 
-                        Nothing ->
-                            ""
-                   )
-                ++ " does not exist in record["
-                ++ toString rowIndex
-                ++ "]"
-
-        InvalidDataType rowIndex mes ->
-            mes
-                ++ " in record["
-                ++ toString rowIndex
-                ++ "]"
-
-        Fail rowIndex s ->
-            s
-                ++ " in record["
-                ++ toString rowIndex
-                ++ "]"
+fieldsBetween : String -> String -> Decoder (Dict String String)
+fieldsBetween key1 key2 =
+    Decoder
+        (\header rowIndex item ->
+            Debug.crash "not implemented yet."
+        )
 
 
 {-| -}
@@ -307,3 +286,48 @@ runWithOptions options decoder source =
     in
         decodeItems decoder header items
             |> Result.mapError formatError
+
+
+formatError : Error -> String
+formatError e =
+    case e of
+        ColumnNotFoundInHeader rowIndex colName ->
+            "column '"
+                ++ colName
+                ++ "' does not exist in header in record["
+                ++ toString rowIndex
+                ++ "]"
+
+        ColumnNotFoundInBody rowIndex colIndex colName ->
+            "column["
+                ++ toString colIndex
+                ++ "]"
+                ++ (case colName of
+                        Just name ->
+                            " namely '" ++ name ++ "'"
+
+                        Nothing ->
+                            ""
+                   )
+                ++ " does not exist in record["
+                ++ toString rowIndex
+                ++ "]"
+
+        InvalidDataType rowIndex mes ->
+            mes
+                ++ " in record["
+                ++ toString rowIndex
+                ++ "]"
+
+        AmbiguousField rowIndex key ->
+            "ambiguous field '"
+                ++ key
+                ++ "' was accessed in record["
+                ++ toString rowIndex
+                ++ "]"
+
+        Fail rowIndex s ->
+            s
+                ++ " in record["
+                ++ toString rowIndex
+                ++ "]"
