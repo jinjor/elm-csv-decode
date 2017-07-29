@@ -24,15 +24,8 @@ testCsvFail source decoder =
             Ok actual ->
                 Expect.fail ("unexpectedly succeeded: " ++ toString actual)
 
-            Err e ->
-                let
-                    message =
-                        formatError e
-                in
-                    if String.contains "-1" message then
-                        Expect.fail ("bad error message: " ++ message)
-                    else
-                        Expect.pass
+            Err _ ->
+                Expect.pass
 
 
 suite : Test
@@ -243,11 +236,8 @@ id,name,age
 example : Test
 example =
     test "example works" <|
-        \_ ->
-            CsvDecode.run userDecoder source
-                |> Expect.equal
-                    (Ok
-                        [ { id = "1", name = "John Smith", age = 20, mail = Nothing }
-                        , { id = "2", name = "Jane Smith", age = 19, mail = Nothing }
-                        ]
-                    )
+        testCsv source
+            [ { id = "1", name = "John Smith", age = 20, mail = Nothing }
+            , { id = "2", name = "Jane Smith", age = 19, mail = Nothing }
+            ]
+            userDecoder
