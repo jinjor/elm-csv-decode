@@ -13,8 +13,8 @@ testCsv source exp decoder =
             Ok actual ->
                 Expect.equal exp actual
 
-            Err e ->
-                Expect.fail ("fail to decode: " ++ formatError e)
+            Err s ->
+                Expect.fail ("fail to decode: " ++ s)
 
 
 testCsvFail : String -> Decoder a -> (() -> Expectation)

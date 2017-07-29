@@ -3,9 +3,10 @@ elm-csv-decode
 
 [![Build Status](https://travis-ci.org/jinjor/elm-csv-decode.svg)](https://travis-ci.org/jinjor/elm-csv-decode)
 
-CSV Decoder for Elm.
+A CSV decoder for Elm. This library internally uses [lovasoa/elm-csv](http://package.elm-lang.org/packages/lovasoa/elm-csv/latest) for parsing. If you want to know how it parses CSV, visit it.
 
 ```elm
+-- Now we are going to decode each record as User type.
 type alias User =
     { id : String
     , name : String
@@ -14,6 +15,7 @@ type alias User =
     }
 
 
+-- You define decoder with type `Decoder User`
 userDecoder : Decoder User
 userDecoder =
     succeed User
@@ -23,6 +25,7 @@ userDecoder =
         |= optional (field "mail")
 
 
+-- This is the source formed of CSV.
 source : String
 source =
     """
@@ -32,12 +35,15 @@ id,name,age
 """
 
 
+-- Run decoder.
 > CsvDecode.run userDecoder source
 Ok
     [ { id = "1", name = "John Smith", age = 20, mail = Nothing }
     , { id = "2", name = "Jane Smith", age = 19, mail = Nothing }
     ]
 ```
+
+Pipeline interface is inspired by [elm-tools/parser](http://package.elm-lang.org/packages/elm-tools/parser/latest/Parser).
 
 
 ## LICENSE

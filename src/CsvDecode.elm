@@ -2,7 +2,6 @@ module CsvDecode
     exposing
         ( Decoder
         , Options
-        , Error
         , succeed
         , fail
         , field
@@ -17,13 +16,12 @@ module CsvDecode
         , run
         , runWithOptions
         , defaultOptions
-        , formatError
         )
 
 {-| Decode CSV.
 
 # Types
-@docs Decoder, Options, Error
+@docs Decoder, Options
 
 # Primitives
 @docs succeed, fail, field, index
@@ -35,7 +33,7 @@ module CsvDecode
 @docs (|=), map, andThen
 
 # Run
-@docs run, runWithOptions, defaultOptions, formatError
+@docs run, runWithOptions, defaultOptions
 -}
 
 import Dict exposing (Dict)
@@ -47,9 +45,8 @@ type Decoder a
     = Decoder (Header -> Int -> Item -> Result Error a)
 
 
-{-| -}
 type Error
-    = ColumnNotFoundInHeader String
+    = ColumnNotFoundInHeader Int String
     | ColumnNotFoundInBody Int Int (Maybe String)
     | InvalidDataType Int String
       -- TODO: column index (and name) is available in most cases
@@ -96,16 +93,19 @@ field key =
             header
                 |> Dict.get key
                 |> Maybe.map (\index -> getByIndex (ColumnNotFoundInBody rowIndex index (Just key)) item index)
-                |> Maybe.withDefault (Err (ColumnNotFoundInHeader key))
+                |> Maybe.withDefault (Err (ColumnNotFoundInHeader rowIndex key))
         )
 
 
-{-| -}
 formatError : Error -> String
 formatError e =
     case e of
-        ColumnNotFoundInHeader colName ->
-            "column '" ++ colName ++ "' does not exist in header"
+        ColumnNotFoundInHeader rowIndex colName ->
+            "column '"
+                ++ colName
+                ++ "' does not exist in header in record["
+                ++ toString rowIndex
+                ++ "]"
 
         ColumnNotFoundInBody rowIndex colIndex colName ->
             "column["
@@ -268,7 +268,7 @@ decodeItemsHelp decoder header items rowIndex list =
 
 
 {-| -}
-run : Decoder a -> String -> Result Error (List a)
+run : Decoder a -> String -> Result String (List a)
 run =
     runWithOptions defaultOptions
 
@@ -282,7 +282,7 @@ defaultOptions =
 
 
 {-| -}
-runWithOptions : Options -> Decoder a -> String -> Result Error (List a)
+runWithOptions : Options -> Decoder a -> String -> Result String (List a)
 runWithOptions options decoder source =
     let
         csv =
@@ -297,3 +297,4 @@ runWithOptions options decoder source =
             csv.records
     in
         decodeItems decoder header items
+            |> Result.mapError formatError
