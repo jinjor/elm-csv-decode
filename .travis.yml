@@ -1,0 +1,8 @@
+language: node_js
+node_js:
+  - "6"
+before_script:
+  - npm install -g elm@0.18.0
+  - npm install -g elm-test@0.18.7
+  - elm-package install -y
+script: elm-test --fuzz 100 --seed 566505583

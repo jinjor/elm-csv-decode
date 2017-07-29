@@ -1,4 +1,4 @@
-module Example exposing (..)
+module Tests exposing (..)
 
 import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer)
@@ -44,6 +44,14 @@ suite =
                 testCsvFail "1,2,3\na,b,c" <|
                     fail ""
             ]
+        , describe "field"
+            [ test "works" <|
+                testCsv "1,2,3\na,b,c" [ "b" ] <|
+                    field "2"
+            , test "fails if it does not exist" <|
+                testCsvFail "1,2,3\na,b,c" <|
+                    field "foo"
+            ]
         , describe "index"
             [ test "works" <|
                 testCsv "1,2,3\na,b,c" [ "b" ] <|
@@ -54,14 +62,6 @@ suite =
             , test "fails if it is out of range" <|
                 testCsvFail "1,2,3\na,b,c" <|
                     index 3
-            ]
-        , describe "field"
-            [ test "works" <|
-                testCsv "1,2,3\na,b,c" [ "b" ] <|
-                    field "2"
-            , test "fails if it does not exist" <|
-                testCsvFail "1,2,3\na,b,c" <|
-                    field "foo"
             ]
         , describe "int"
             [ test "converts string value into int value" <|

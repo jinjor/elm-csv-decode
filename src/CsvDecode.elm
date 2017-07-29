@@ -1,4 +1,37 @@
-module CsvDecode exposing (..)
+module CsvDecode
+    exposing
+        ( Decoder
+        , succeed
+        , fail
+        , field
+        , index
+        , int
+        , float
+        , optional
+        , (|=)
+        , map
+        , andThen
+        , run
+        )
+
+{-| Compares two list and returns how they have changed.
+Each function internally uses Wu's [O(NP) algorithm](http://myerslab.mpi-cbg.de/wp-content/uploads/2014/06/np_diff.pdf).
+
+# Types
+@docs Decoder
+
+# Primitives
+@docs succeed, fail, field, index
+
+# Conversion
+@docs int, float, optional
+
+# Transform
+@docs (|=), map, andThen
+
+# Run
+@docs run
+-}
 
 import Dict exposing (Dict)
 import Csv
@@ -21,6 +54,19 @@ type Column
     | Field String
 
 
+{-| -}
+succeed : a -> Decoder a
+succeed a =
+    Decoder (\_ _ -> Ok a)
+
+
+{-| -}
+fail : String -> Decoder a
+fail message =
+    Decoder (\_ _ -> Err message)
+
+
+{-| -}
 field : String -> Decoder String
 field key =
     Decoder
@@ -32,6 +78,7 @@ field key =
         )
 
 
+{-| -}
 index : Int -> Decoder String
 index index =
     Decoder
@@ -48,6 +95,48 @@ getByIndex errMessage item i =
         |> Result.fromMaybe errMessage
 
 
+{-| -}
+int : Decoder String -> Decoder Int
+int (Decoder f) =
+    Decoder
+        (\header item ->
+            f header item |> Result.andThen String.toInt
+        )
+
+
+{-| -}
+float : Decoder String -> Decoder Float
+float (Decoder f) =
+    Decoder
+        (\header item ->
+            f header item |> Result.andThen String.toFloat
+        )
+
+
+{-| -}
+optional : Decoder a -> Decoder (Maybe a)
+optional (Decoder f) =
+    Decoder
+        (\header item ->
+            f header item
+                |> Result.toMaybe
+                |> Ok
+        )
+
+
+{-| -}
+(|=) : Decoder (a -> b) -> Decoder a -> Decoder b
+(|=) (Decoder transform) (Decoder f) =
+    Decoder
+        (\header item ->
+            Result.map2 (\t a -> t a)
+                (transform header item)
+                (f header item)
+        )
+infixl 5 |=
+
+
+{-| -}
 map : (a -> b) -> Decoder a -> Decoder b
 map transform (Decoder f) =
     Decoder
@@ -56,6 +145,7 @@ map transform (Decoder f) =
         )
 
 
+{-| -}
 andThen : (a -> Decoder b) -> Decoder a -> Decoder b
 andThen toDecoder (Decoder f) =
     Decoder
@@ -88,53 +178,7 @@ decodeItems decoder header items =
                     )
 
 
-int : Decoder String -> Decoder Int
-int (Decoder f) =
-    Decoder
-        (\header item ->
-            f header item |> Result.andThen String.toInt
-        )
-
-
-float : Decoder String -> Decoder Float
-float (Decoder f) =
-    Decoder
-        (\header item ->
-            f header item |> Result.andThen String.toFloat
-        )
-
-
-optional : Decoder a -> Decoder (Maybe a)
-optional (Decoder f) =
-    Decoder
-        (\header item ->
-            f header item
-                |> Result.toMaybe
-                |> Ok
-        )
-
-
-succeed : a -> Decoder a
-succeed a =
-    Decoder (\_ _ -> Ok a)
-
-
-fail : String -> Decoder a
-fail message =
-    Decoder (\_ _ -> Err message)
-
-
-(|=) : Decoder (a -> b) -> Decoder a -> Decoder b
-(|=) (Decoder transform) (Decoder f) =
-    Decoder
-        (\header item ->
-            Result.map2 (\t a -> t a)
-                (transform header item)
-                (f header item)
-        )
-infixl 5 |=
-
-
+{-| -}
 run : Decoder a -> String -> Result String (List a)
 run decoder source =
     let
