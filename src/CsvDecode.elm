@@ -1,6 +1,7 @@
 module CsvDecode
     exposing
         ( Decoder
+        , Options
         , succeed
         , fail
         , field
@@ -8,33 +9,47 @@ module CsvDecode
         , int
         , float
         , optional
+        , optionalString
         , (|=)
         , map
         , andThen
         , run
+        , runWithOptions
+        , defaultOptions
         )
 
-{-| Compares two list and returns how they have changed.
-Each function internally uses Wu's [O(NP) algorithm](http://myerslab.mpi-cbg.de/wp-content/uploads/2014/06/np_diff.pdf).
+{-| Decode CSV.
 
 # Types
-@docs Decoder
+@docs Decoder, Options
 
 # Primitives
 @docs succeed, fail, field, index
 
 # Conversion
-@docs int, float, optional
+@docs int, float, optional, optionalString
 
 # Transform
 @docs (|=), map, andThen
 
 # Run
-@docs run
+@docs run, runWithOptions, defaultOptions
 -}
 
 import Dict exposing (Dict)
 import Csv
+
+
+{-| -}
+type Decoder a
+    = Decoder (Header -> Item -> Result String a)
+
+
+{-| -}
+type alias Options =
+    { separator : String
+    , noHeader : Bool
+    }
 
 
 type alias Header =
@@ -43,10 +58,6 @@ type alias Header =
 
 type alias Item =
     List String
-
-
-type Decoder a
-    = Decoder (Header -> Item -> Result String a)
 
 
 type Column
@@ -125,6 +136,23 @@ optional (Decoder f) =
 
 
 {-| -}
+optionalString : Decoder String -> Decoder (Maybe String)
+optionalString (Decoder f) =
+    Decoder
+        (\header item ->
+            case f header item of
+                Ok s ->
+                    if String.trim s == "" then
+                        Ok Nothing
+                    else
+                        Ok (Just s)
+
+                Err e ->
+                    Ok Nothing
+        )
+
+
+{-| -}
 (|=) : Decoder (a -> b) -> Decoder a -> Decoder b
 (|=) (Decoder transform) (Decoder f) =
     Decoder
@@ -180,10 +208,24 @@ decodeItems decoder header items =
 
 {-| -}
 run : Decoder a -> String -> Result String (List a)
-run decoder source =
+run =
+    runWithOptions defaultOptions
+
+
+{-| -}
+defaultOptions : Options
+defaultOptions =
+    { separator = ","
+    , noHeader = False
+    }
+
+
+{-| -}
+runWithOptions : Options -> Decoder a -> String -> Result String (List a)
+runWithOptions options decoder source =
     let
         csv =
-            Csv.parse source
+            Csv.parseWith options.separator source
 
         header =
             csv.headers

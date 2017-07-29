@@ -89,7 +89,7 @@ suite =
             , test "works for int" <|
                 testCsv "1,2,3\n10,20,30" [ Just 20 ] <|
                     optional (int (index 1))
-            , test "results in Just if conversion fails" <|
+            , test "results in Nothing if conversion fails" <|
                 testCsv "1,2,3\n10,fooo,30" [ Nothing ] <|
                     optional (int (index 1))
             , test "results in Just if value is empty string" <|
@@ -101,6 +101,20 @@ suite =
             , test "results in Nothing if field does not exist" <|
                 testCsv "1,2,3\n10,20,30" [ Nothing ] <|
                     optional (field "4")
+            ]
+        , describe "optionalString"
+            [ test "results in Just if the value exists" <|
+                testCsv "1,2,3\na,b,c" [ Just "b" ] <|
+                    optionalString (index 1)
+            , test "results in Nothing if value is empty string" <|
+                testCsv "1,2,3\na,,b" [ Nothing ] <|
+                    optionalString (index 1)
+            , test "results in Nothing if index is out of bounds" <|
+                testCsv "1,2,3\n10,20,30" [ Nothing ] <|
+                    optionalString (index 3)
+            , test "results in Nothing if field does not exist" <|
+                testCsv "1,2,3\n10,20,30" [ Nothing ] <|
+                    optionalString (field "4")
             ]
         , test "pipeline" <|
             testCsv "1,2,3\na,b,c\nd,e,f" [ ( "a", "b", "c" ), ( "d", "e", "f" ) ] <|
@@ -169,3 +183,46 @@ suite =
                     )
             ]
         ]
+
+
+
+-- EXAMPLE
+
+
+type alias User =
+    { id : String
+    , name : String
+    , age : Int
+    , mail : Maybe String
+    }
+
+
+userDecoder : Decoder User
+userDecoder =
+    succeed User
+        |= field "id"
+        |= field "name"
+        |= int (field "age")
+        |= optional (field "mail")
+
+
+source : String
+source =
+    """
+id,name,age
+1,John Smith,20
+2,Jane Smith,19
+"""
+
+
+example : Test
+example =
+    test "example works" <|
+        \_ ->
+            CsvDecode.run userDecoder source
+                |> Expect.equal
+                    (Ok
+                        [ { id = "1", name = "John Smith", age = 20, mail = Nothing }
+                        , { id = "2", name = "Jane Smith", age = 19, mail = Nothing }
+                        ]
+                    )

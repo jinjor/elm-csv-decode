@@ -1,6 +1,6 @@
 {
     "version": "1.0.0",
-    "summary": "CSV decoder for Elm",
+    "summary": "CSV Decoder for Elm",
     "repository": "https://github.com/jinjor/elm-csv-decode.git",
     "license": "BSD-3-Clause",
     "source-directories": [
