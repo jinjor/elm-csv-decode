@@ -192,6 +192,24 @@ suite =
         ]
 
 
+largeTable : String
+largeTable =
+    "1,2,3\n"
+        ++ (List.range 1 10000
+                |> List.map (\i -> "a,b,c")
+                |> String.join "\n"
+           )
+
+
+largeTableTest : Test
+largeTableTest =
+    describe "Large Table"
+        [ test "does not cause stack overflow" <|
+            testCsv largeTable (List.repeat 10000 1) <|
+                succeed 1
+        ]
+
+
 
 -- EXAMPLE
 

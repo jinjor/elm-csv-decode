@@ -245,21 +245,22 @@ decodeItem (Decoder f) header item =
 
 decodeItems : Decoder a -> Header -> List Item -> Result Error (List a)
 decodeItems decoder header items =
-    -- TODO: TCO
+    decodeItemsHelp decoder header items 1 []
+
+
+decodeItemsHelp : Decoder a -> Header -> List Item -> Int -> List a -> Result Error (List a)
+decodeItemsHelp decoder header items index list =
     case items of
         [] ->
-            Ok []
+            Ok (List.reverse list)
 
         x :: xs ->
-            decodeItem decoder header x
-                |> Result.andThen
-                    (\a ->
-                        decodeItems decoder header xs
-                            |> Result.map
-                                (\tail ->
-                                    a :: tail
-                                )
-                    )
+            case decodeItem decoder header x of
+                Ok a ->
+                    decodeItemsHelp decoder header xs (index + 1) (a :: list)
+
+                Err e ->
+                    Err e
 
 
 {-| -}
