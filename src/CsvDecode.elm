@@ -2,6 +2,7 @@ module CsvDecode
     exposing
         ( Decoder
         , Options
+        , Error
         , succeed
         , fail
         , field
@@ -16,12 +17,13 @@ module CsvDecode
         , run
         , runWithOptions
         , defaultOptions
+        , formatError
         )
 
 {-| Decode CSV.
 
 # Types
-@docs Decoder, Options
+@docs Decoder, Options, Error
 
 # Primitives
 @docs succeed, fail, field, index
@@ -33,7 +35,7 @@ module CsvDecode
 @docs (|=), map, andThen
 
 # Run
-@docs run, runWithOptions, defaultOptions
+@docs run, runWithOptions, defaultOptions, formatError
 -}
 
 import Dict exposing (Dict)
@@ -42,7 +44,16 @@ import Csv
 
 {-| -}
 type Decoder a
-    = Decoder (Header -> Item -> Result String a)
+    = Decoder (Header -> Item -> Result Error a)
+
+
+{-| -}
+type Error
+    = ColumnNotFoundInHeader String
+    | ColumnNotFoundInBody Int Int (Maybe String)
+    | InvalidDataType Int String
+      -- TODO: column index (and name) is available in most cases
+    | Fail Int String
 
 
 {-| -}
@@ -74,7 +85,7 @@ succeed a =
 {-| -}
 fail : String -> Decoder a
 fail message =
-    Decoder (\_ _ -> Err message)
+    Decoder (\_ _ -> Err (Fail -1 message))
 
 
 {-| -}
@@ -84,9 +95,44 @@ field key =
         (\header item ->
             header
                 |> Dict.get key
-                |> Maybe.map (\index -> getByIndex ("column['" ++ key ++ "'] does not exist in item") item index)
-                |> Maybe.withDefault (Err ("column['" ++ key ++ "'] does not exist in header"))
+                |> Maybe.map (\index -> getByIndex (ColumnNotFoundInBody -1 index (Just key)) item index)
+                |> Maybe.withDefault (Err (ColumnNotFoundInHeader key))
         )
+
+
+{-| -}
+formatError : Error -> String
+formatError e =
+    case e of
+        ColumnNotFoundInHeader colName ->
+            "column['" ++ colName ++ "'] does not exist in header"
+
+        ColumnNotFoundInBody rowIndex colIndex colName ->
+            "column['"
+                ++ toString colIndex
+                ++ "']"
+                ++ (case colName of
+                        Just name ->
+                            " namely '" ++ name ++ "'"
+
+                        Nothing ->
+                            ""
+                   )
+                ++ " does not exist in record["
+                ++ toString rowIndex
+                ++ "]"
+
+        InvalidDataType rowIndex mes ->
+            mes
+                ++ " in record["
+                ++ toString rowIndex
+                ++ "]"
+
+        Fail rowIndex s ->
+            s
+                ++ " in record["
+                ++ toString rowIndex
+                ++ "]"
 
 
 {-| -}
@@ -94,11 +140,11 @@ index : Int -> Decoder String
 index index =
     Decoder
         (\_ item ->
-            getByIndex ("column[" ++ toString index ++ "] does not exist in item") item index
+            getByIndex (ColumnNotFoundInBody -1 index Nothing) item index
         )
 
 
-getByIndex : String -> Item -> Int -> Result String String
+getByIndex : Error -> Item -> Int -> Result Error String
 getByIndex errMessage item i =
     item
         |> List.drop i
@@ -111,7 +157,12 @@ int : Decoder String -> Decoder Int
 int (Decoder f) =
     Decoder
         (\header item ->
-            f header item |> Result.andThen String.toInt
+            f header item
+                |> Result.andThen
+                    (\s ->
+                        String.toInt s
+                            |> Result.mapError (InvalidDataType -1)
+                    )
         )
 
 
@@ -120,7 +171,12 @@ float : Decoder String -> Decoder Float
 float (Decoder f) =
     Decoder
         (\header item ->
-            f header item |> Result.andThen String.toFloat
+            f header item
+                |> Result.andThen
+                    (\s ->
+                        String.toFloat s
+                            |> Result.mapError (InvalidDataType -1)
+                    )
         )
 
 
@@ -182,12 +238,12 @@ andThen toDecoder (Decoder f) =
         )
 
 
-decodeItem : Decoder a -> Header -> Item -> Result String a
+decodeItem : Decoder a -> Header -> Item -> Result Error a
 decodeItem (Decoder f) header item =
     f header item
 
 
-decodeItems : Decoder a -> Header -> List Item -> Result String (List a)
+decodeItems : Decoder a -> Header -> List Item -> Result Error (List a)
 decodeItems decoder header items =
     -- TODO: TCO
     case items of
@@ -207,7 +263,7 @@ decodeItems decoder header items =
 
 
 {-| -}
-run : Decoder a -> String -> Result String (List a)
+run : Decoder a -> String -> Result Error (List a)
 run =
     runWithOptions defaultOptions
 
@@ -221,7 +277,7 @@ defaultOptions =
 
 
 {-| -}
-runWithOptions : Options -> Decoder a -> String -> Result String (List a)
+runWithOptions : Options -> Decoder a -> String -> Result Error (List a)
 runWithOptions options decoder source =
     let
         csv =
