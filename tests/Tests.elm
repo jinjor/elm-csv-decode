@@ -74,6 +74,9 @@ suite =
             , test "fails if it does not exist" <|
                 testCsvFail "1,2,3\na,b,c" <|
                     field "foo"
+            , test "fails if value is empty" <|
+                testCsvFail "1,2,3\na,,c" <|
+                    field "2"
             , test "fails if passed field is not unique" <|
                 testCsvFail "1,1,3\na,b,c" <|
                     field "1"
@@ -82,8 +85,8 @@ suite =
             [ test "works" <|
                 testCsv "1,2,3\na,b,c" [ "b" ] <|
                     index 1
-            , test "still works if value is empty" <|
-                testCsv "1,2,3\na,,c" [ "" ] <|
+            , test "fails if value is empty" <|
+                testCsvFail "1,2,3\na,,c" <|
                     index 1
             , test "fails if it is out of range" <|
                 testCsvFail "1,2,3\na,b,c" <|
@@ -151,6 +154,14 @@ suite =
                 testCsvFail "1,2,3\n10,foo,30" <|
                     float (index 1)
             ]
+        , describe "string"
+            [ test "succeeds if value is not empty" <|
+                testCsv "1,2,3\n1,2,3" [ "2" ] <|
+                    string (index 1)
+            , test "still succeeds if value is empty" <|
+                testCsv "1,2,3\n1,,3" [ "" ] <|
+                    string (index 1)
+            ]
         , describe "optional"
             [ test "results in Just if the value exists" <|
                 testCsv "1,2,3\na,b,c" [ Just "b" ] <|
@@ -158,32 +169,24 @@ suite =
             , test "works for int" <|
                 testCsv "1,2,3\n10,20,30" [ Just 20 ] <|
                     optional (int (index 1))
-            , test "results in Nothing if conversion fails" <|
-                testCsv "1,2,3\n10,fooo,30" [ Nothing ] <|
+            , test "fails if conversion fails" <|
+                testCsvFail "1,2,3\n10,foo,30" <|
                     optional (int (index 1))
-            , test "results in Just if value is empty string" <|
-                testCsv "1,2,3\n10,,30" [ Just "" ] <|
+            , test "results in Nothing if value is empty" <|
+                testCsv "1,2,3\n10,,30" [ Nothing ] <|
                     optional (index 1)
+            , test "results in Nothing if value is empty and int is expected" <|
+                testCsv "1,2,3\n10,,30" [ Nothing ] <|
+                    optional (int (index 1))
+            , test "results in Just if value is empty and string is expected" <|
+                testCsv "1,2,3\n10,,30" [ Just "" ] <|
+                    optional (string (index 1))
             , test "results in Nothing if index is out of bounds" <|
                 testCsv "1,2,3\n10,20,30" [ Nothing ] <|
                     optional (index 3)
             , test "results in Nothing if field does not exist" <|
                 testCsv "1,2,3\n10,20,30" [ Nothing ] <|
                     optional (field "4")
-            ]
-        , describe "optionalString"
-            [ test "results in Just if the value exists" <|
-                testCsv "1,2,3\na,b,c" [ Just "b" ] <|
-                    optionalString (index 1)
-            , test "results in Nothing if value is empty string" <|
-                testCsv "1,2,3\na,,b" [ Nothing ] <|
-                    optionalString (index 1)
-            , test "results in Nothing if index is out of bounds" <|
-                testCsv "1,2,3\n10,20,30" [ Nothing ] <|
-                    optionalString (index 3)
-            , test "results in Nothing if field does not exist" <|
-                testCsv "1,2,3\n10,20,30" [ Nothing ] <|
-                    optionalString (field "4")
             ]
         , test "pipeline" <|
             testCsv "1,2,3\na,b,c\nd,e,f" [ ( "a", "b", "c" ), ( "d", "e", "f" ) ] <|
@@ -324,9 +327,9 @@ userDecoder =
 source : String
 source =
     """
-id,name,age
-1,John Smith,20
-2,Jane Smith,19
+id,name,age,mail
+1,John Smith,20,john@example.com
+2,Jane Smith,19,
 """
 
 
@@ -334,7 +337,7 @@ example : Test
 example =
     test "example works" <|
         testCsv source
-            [ { id = "1", name = "John Smith", age = 20, mail = Nothing }
+            [ { id = "1", name = "John Smith", age = 20, mail = Just "john@example.com" }
             , { id = "2", name = "Jane Smith", age = 19, mail = Nothing }
             ]
             userDecoder

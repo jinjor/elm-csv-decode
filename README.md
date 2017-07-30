@@ -29,16 +29,16 @@ userDecoder =
 source : String
 source =
     """
-id,name,age
-1,John Smith,20
-2,Jane Smith,19
+id,name,age,mail
+1,John Smith,20,john@example.com
+2,Jane Smith,19,
 """
 
 
 -- Run decoder.
 > CsvDecode.run userDecoder source
 Ok
-    [ { id = "1", name = "John Smith", age = 20, mail = Nothing }
+    [ { id = "1", name = "John Smith", age = 20, mail = Just "john@example.com" }
     , { id = "2", name = "Jane Smith", age = 19, mail = Nothing }
     ]
 ```
