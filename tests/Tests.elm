@@ -4,6 +4,7 @@ import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer)
 import Test exposing (..)
 import CsvDecode exposing (..)
+import Dict
 
 
 testCsv : String -> List a -> Decoder a -> (() -> Expectation)
@@ -73,6 +74,9 @@ suite =
             , test "fails if it does not exist" <|
                 testCsvFail "1,2,3\na,b,c" <|
                     field "foo"
+            , test "fails if passed field is not unique" <|
+                testCsvFail "1,1,3\na,b,c" <|
+                    field "1"
             ]
         , describe "index"
             [ test "works" <|
@@ -84,6 +88,49 @@ suite =
             , test "fails if it is out of range" <|
                 testCsvFail "1,2,3\na,b,c" <|
                     index 3
+            ]
+        , describe "fieldsAfter"
+            [ test "works" <|
+                testCsv "1,2,3\na,b,c" [ Dict.fromList [ ( "2", "b" ), ( "3", "c" ) ] ] <|
+                    fieldsAfter "1"
+            , test "fails if passed field does not exist" <|
+                testCsvFail "1,2,3\na,b,c" <|
+                    fieldsAfter "4"
+            , test "fails if passed field is not unique" <|
+                testCsvFail "1,1,3\na,b,c" <|
+                    fieldsAfter "1"
+            , test "works if passed field is unique" <|
+                testCsv "1,1,2,3,4\na,b,c,d,e" [ Dict.fromList [ ( "3", "d" ), ( "4", "e" ) ] ] <|
+                    fieldsAfter "2"
+            , test "fails if rest field is not unique" <|
+                testCsvFail "1,2,3,3\na,b,c,d" <|
+                    fieldsAfter "1"
+            ]
+        , describe "fieldsBetween"
+            [ test "works" <|
+                testCsv "1,2,3\na,b,c" [ Dict.fromList [ ( "2", "b" ) ] ] <|
+                    fieldsBetween "1" "3"
+            , test "still works if result is empty" <|
+                testCsv "1,2,3\na,b,c" [ Dict.empty ] <|
+                    fieldsBetween "1" "2"
+            , test "fails if one of passed fields does not exist" <|
+                testCsvFail "1,2,3\na,b,c" <|
+                    fieldsBetween "4" "3"
+            , test "fails if one of passed fields does not exist 2" <|
+                testCsvFail "1,2,3\na,b,c" <|
+                    fieldsBetween "1" "4"
+            , test "fails if passed field is not unique" <|
+                testCsvFail "1,1,3\na,b,c" <|
+                    fieldsBetween "1" "3"
+            , test "fails if passed field is not unique 2" <|
+                testCsvFail "1,3,3\na,b,c" <|
+                    fieldsBetween "1" "3"
+            , test "works if passed field is unique" <|
+                testCsv "1,1,2,3,4,5,5\na,b,c,d,e,f,g" [ Dict.fromList [ ( "3", "d" ) ] ] <|
+                    fieldsBetween "2" "4"
+            , test "fails if rest field is not unique" <|
+                testCsvFail "1,2,2,3\na,b,c,d" <|
+                    fieldsBetween "1" "3"
             ]
         , describe "int"
             [ test "converts string value into int value" <|

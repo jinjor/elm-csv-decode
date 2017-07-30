@@ -6,6 +6,8 @@ module CsvDecode
         , fail
         , field
         , index
+        , fieldsAfter
+        , fieldsBetween
         , int
         , float
         , optional
@@ -24,7 +26,7 @@ module CsvDecode
 @docs Decoder, Options
 
 # Primitives
-@docs succeed, fail, field, index
+@docs succeed, fail, field, index, fieldsAfter, fieldsBetween
 
 # Conversion
 @docs int, float, optional, optionalString
@@ -61,8 +63,12 @@ type alias Options =
     }
 
 
+{-| Note: nameToIndex returns -1 if name is duplicated
+-}
 type alias Header =
-    Dict String Int
+    { nameToIndex : Dict String Int
+    , indexToName : Dict Int String
+    }
 
 
 type alias Item =
@@ -91,27 +97,100 @@ field : String -> Decoder String
 field key =
     Decoder
         (\header rowIndex item ->
-            header
+            header.nameToIndex
                 |> Dict.get key
-                |> Maybe.map (\index -> getByIndex (ColumnNotFoundInBody rowIndex index (Just key)) item index)
+                |> Maybe.map
+                    (\index ->
+                        if index == -1 then
+                            Err (AmbiguousField rowIndex key)
+                        else
+                            getByIndex (ColumnNotFoundInBody rowIndex index (Just key)) item index
+                    )
                 |> Maybe.withDefault (Err (ColumnNotFoundInHeader rowIndex key))
         )
 
 
+{-|
+
+```
+key1,key2,unknown1,unknown2,...
+1,2,a,b,...
+```
+
+-}
 fieldsAfter : String -> Decoder (Dict String String)
 fieldsAfter key =
     Decoder
         (\header rowIndex item ->
-            Debug.crash "not implemented yet."
+            case Dict.get key header.nameToIndex of
+                Just -1 ->
+                    Err (AmbiguousField rowIndex key)
+
+                Just index ->
+                    makeDictInRange (\i -> i > index) header rowIndex item
+
+                Nothing ->
+                    Err (ColumnNotFoundInHeader rowIndex key)
         )
 
 
+{-|
+
+```
+key1,key2,unknown1,unknown2,...,key3,key4
+1,2,a,b,...,3,4
+```
+
+-}
 fieldsBetween : String -> String -> Decoder (Dict String String)
 fieldsBetween key1 key2 =
     Decoder
         (\header rowIndex item ->
-            Debug.crash "not implemented yet."
+            case ( Dict.get key1 header.nameToIndex, Dict.get key2 header.nameToIndex ) of
+                ( Just -1, Just _ ) ->
+                    Err (AmbiguousField rowIndex key1)
+
+                ( Just _, Just -1 ) ->
+                    Err (AmbiguousField rowIndex key2)
+
+                ( Just index1, Just index2 ) ->
+                    makeDictInRange (\i -> i > index1 && i < index2) header rowIndex item
+
+                ( Nothing, _ ) ->
+                    Err (ColumnNotFoundInHeader rowIndex key1)
+
+                _ ->
+                    Err (ColumnNotFoundInHeader rowIndex key2)
         )
+
+
+makeDictInRange : (Int -> Bool) -> Header -> Int -> Item -> Result Error (Dict String String)
+makeDictInRange isInRange header rowIndex item =
+    item
+        |> List.indexedMap
+            (\i value ->
+                if isInRange i then
+                    header.indexToName
+                        |> Dict.get i
+                        |> Maybe.map (\key -> ( key, value ))
+                else
+                    Nothing
+            )
+        |> List.filterMap identity
+        |> makeDictInRangeHelp rowIndex Dict.empty
+
+
+makeDictInRangeHelp : Int -> Dict String String -> List ( String, String ) -> Result Error (Dict String String)
+makeDictInRangeHelp rowIndex dict list =
+    case list of
+        [] ->
+            Ok dict
+
+        ( key, value ) :: rest ->
+            if Dict.member key dict then
+                Err (AmbiguousField rowIndex key)
+            else
+                makeDictInRangeHelp rowIndex (Dict.insert key value dict) rest
 
 
 {-| -}
@@ -275,17 +354,48 @@ runWithOptions options decoder source =
 
         header =
             if options.noHeader then
-                Dict.empty
+                Header Dict.empty Dict.empty
             else
-                csv.headers
-                    |> List.indexedMap (\i colName -> ( colName, i ))
-                    |> Dict.fromList
+                Header
+                    (makeNameToIndexDict csv.headers)
+                    (csv.headers
+                        |> List.indexedMap (,)
+                        |> Dict.fromList
+                    )
 
         items =
             csv.records
     in
         decodeItems decoder header items
             |> Result.mapError formatError
+
+
+makeNameToIndexDict : List String -> Dict String Int
+makeNameToIndexDict names =
+    makeNameToIndexDictHelp 0 names Dict.empty
+
+
+makeNameToIndexDictHelp : Int -> List String -> Dict String Int -> Dict String Int
+makeNameToIndexDictHelp index names dict =
+    case names of
+        [] ->
+            dict
+
+        name :: rest ->
+            makeNameToIndexDictHelp
+                (index + 1)
+                rest
+                (dict
+                    |> Dict.update name
+                        (\maybeValue ->
+                            case maybeValue of
+                                Just _ ->
+                                    Just -1
+
+                                Nothing ->
+                                    Just index
+                        )
+                )
 
 
 formatError : Error -> String
