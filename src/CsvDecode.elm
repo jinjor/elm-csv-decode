@@ -707,9 +707,8 @@ formatError e =
 
         InvalidDataType rowIndex mes ->
             mes
-                ++ " in record["
-                ++ toString rowIndex
-                ++ "]"
+                ++ " "
+                ++ formatErrorPosition rowIndex
 
         AmbiguousField rowIndex key ->
             "ambiguous field '"
