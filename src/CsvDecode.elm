@@ -512,7 +512,7 @@ decodeItem (Decoder f) header rowIndex item =
 
 decodeItems : Decoder a -> Header -> List Item -> Result Error (List a)
 decodeItems decoder header items =
-    decodeItemsHelp decoder header items 1 []
+    decodeItemsHelp decoder header items 0 []
 
 
 decodeItemsHelp : Decoder a -> Header -> List Item -> Int -> List a -> Result Error (List a)
