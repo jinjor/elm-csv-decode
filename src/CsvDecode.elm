@@ -20,7 +20,7 @@ module CsvDecode
         , defaultOptions
         )
 
-{-| Decode CSV.
+{-| CSV Decoder.
 
 # Types
 @docs Decoder, Options
@@ -45,7 +45,7 @@ import Csv
 -- TYPES
 
 
-{-| Type of decoders. For example, `Decoder Int` decodes each line into integer value.
+{-| Type of decoder. For example, `Decoder Int` decodes each line into integer value.
 -}
 type Decoder a
     = Decoder (Header -> Int -> Item -> Result Error a)
@@ -93,7 +93,7 @@ type Column
 -- PRIMITIVES
 
 
-{-| Makes decoder that always succeeds.
+{-| Make a decoder that always succeeds.
 
 ```elm
 > Decode.run (succeed 100) "a,b,c\n1,2,3"
@@ -108,7 +108,7 @@ succeed a =
     Decoder (\_ _ _ -> Ok a)
 
 
-{-| Makes decoder that always fails.
+{-| Makea a decoder that always fails.
 
 ```elm
 > Decode.run (fail "ouch!") "a,b,c\n1,2,3"
@@ -122,7 +122,7 @@ fail message =
     Decoder (\_ rowIndex _ -> Err (Fail rowIndex message))
 
 
-{-| Makes decoder that get String value for given column name.
+{-| Decode value for given column name.
 
 ```elm
 > Decode.run (field "b") "a,b,c\n1,2,3"
@@ -149,8 +149,7 @@ field key =
         )
 
 
-{-| Makes decoder that get String value for given column index.
-If column names are available, use `field` instead.
+{-| Decode value for given column index. If column names are available, use `field` instead.
 
 ```elm
 > Decode.run (index 1) "a,b,c\n1,2,3"
@@ -328,7 +327,7 @@ float (Decoder f) =
         )
 
 
-{-| Allows empty string. Without this, empty value causes failure.
+{-| Allow empty string. Without this, empty value causes failure.
 
 ```elm
 > Decode.run (field "b") "a,b,c\n1,,3"
@@ -404,7 +403,7 @@ optional (Decoder f) =
         )
 
 
-{-| Makes pipeline to get multiple values from a record.
+{-| Make pipeline to get multiple values from a record.
 
 For example, here is a user table:
 
@@ -446,7 +445,7 @@ userDecoder =
 infixl 5 |=
 
 
-{-| Converts the result to another type.
+{-| Convert the result to another type.
 
 ```
 > Decode.run (map toUpper (field "b")) "a,b,c\nfoo,bar,baz"
@@ -462,7 +461,7 @@ map transform (Decoder f) =
         )
 
 
-{-| This enables to make a decoder that partially depends on its value.
+{-| Enable to make a decoder that partially depends on its value.
 
 For example, here is a list of users:
 
@@ -531,7 +530,7 @@ decodeItemsHelp decoder header items rowIndex list =
                     Err e
 
 
-{-| Runs the decoder. The result is either list of items or error message.
+{-| Run the decoder. The result is either list of items or error message.
 
 ```elm
 > Decode.run (field "b") "a,b,c\n1,2,3"
@@ -563,7 +562,7 @@ defaultOptions =
     }
 
 
-{-| Runs decoder with options.
+{-| Run decoder with options.
 
 ```elm
 > Decode.runWithOptions { separator = ";", noHeader = True } (index 1) "a;b;c"
