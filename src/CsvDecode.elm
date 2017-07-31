@@ -17,6 +17,8 @@ module CsvDecode
         , andThen
         , run
         , runWithOptions
+        , runAll
+        , runAllWithOptions
         , defaultOptions
         )
 
@@ -35,7 +37,7 @@ module CsvDecode
 @docs (|=), map, andThen
 
 # Run
-@docs run, runWithOptions, defaultOptions
+@docs run, runWithOptions, runAll, runAllWithOptions, defaultOptions
 -}
 
 import Dict exposing (Dict)
@@ -56,7 +58,6 @@ type Error
     | ColumnNotFoundInBody Int Int (Maybe String)
     | EmptyValue Int String
     | InvalidDataType Int String
-      -- TODO: column index (and name) is available in most cases
     | AmbiguousField Int String
     | Fail Int String
 
@@ -530,6 +531,26 @@ decodeItemsHelp decoder header items rowIndex list =
                     Err e
 
 
+decodeItemsAll : Decoder a -> Header -> List Item -> ( List a, List Error )
+decodeItemsAll decoder header items =
+    decodeItemsAllHelp decoder header items 0 ( [], [] )
+
+
+decodeItemsAllHelp : Decoder a -> Header -> List Item -> Int -> ( List a, List Error ) -> ( List a, List Error )
+decodeItemsAllHelp decoder header items rowIndex ( results, errors ) =
+    case items of
+        [] ->
+            ( List.reverse results, List.reverse errors )
+
+        x :: xs ->
+            case decodeItem decoder header rowIndex x of
+                Ok a ->
+                    decodeItemsAllHelp decoder header xs (rowIndex + 1) ( a :: results, errors )
+
+                Err e ->
+                    decodeItemsAllHelp decoder header xs (rowIndex + 1) ( results, e :: errors )
+
+
 {-| Run the decoder. The result is either list of items or error message.
 
 ```elm
@@ -576,6 +597,33 @@ Ok ["b"]
 runWithOptions : Options -> Decoder a -> String -> Result String (List a)
 runWithOptions options decoder source =
     let
+        ( header, items ) =
+            prepareData options source
+    in
+        decodeItems decoder header items
+            |> Result.mapError formatError
+
+
+{-| -}
+runAll : Decoder a -> String -> ( List a, List String )
+runAll decoder source =
+    runAllWithOptions defaultOptions decoder source
+
+
+{-| -}
+runAllWithOptions : Options -> Decoder a -> String -> ( List a, List String )
+runAllWithOptions options decoder source =
+    let
+        ( header, items ) =
+            prepareData options source
+    in
+        decodeItemsAll decoder header items
+            |> Tuple.mapSecond (List.map formatError)
+
+
+prepareData : Options -> String -> ( Header, List Item )
+prepareData options source =
+    let
         realSource =
             if options.noHeader then
                 "dummy\n" ++ source
@@ -599,8 +647,7 @@ runWithOptions options decoder source =
         items =
             csv.records
     in
-        decodeItems decoder header items
-            |> Result.mapError formatError
+        ( header, items )
 
 
 makeNameToIndexDict : List String -> Dict String Int
@@ -637,9 +684,8 @@ formatError e =
         ColumnNotFoundInHeader rowIndex colName ->
             "column '"
                 ++ colName
-                ++ "' does not exist in header in record["
-                ++ toString rowIndex
-                ++ "]"
+                ++ "' does not exist in header "
+                ++ formatErrorPosition rowIndex
 
         ColumnNotFoundInBody rowIndex colIndex colName ->
             "column["
@@ -652,14 +698,12 @@ formatError e =
                         Nothing ->
                             ""
                    )
-                ++ " does not exist in record["
-                ++ toString rowIndex
-                ++ "]"
+                ++ " does not exist "
+                ++ formatErrorPosition rowIndex
 
         EmptyValue rowIndex s ->
-            "unexpected empty value in record["
-                ++ toString rowIndex
-                ++ "]"
+            "unexpected empty value "
+                ++ formatErrorPosition rowIndex
 
         InvalidDataType rowIndex mes ->
             mes
@@ -670,12 +714,17 @@ formatError e =
         AmbiguousField rowIndex key ->
             "ambiguous field '"
                 ++ key
-                ++ "' was accessed in record["
-                ++ toString rowIndex
-                ++ "]"
+                ++ "' was accessed "
+                ++ formatErrorPosition rowIndex
 
         Fail rowIndex s ->
             s
-                ++ " in record["
-                ++ toString rowIndex
-                ++ "]"
+                ++ " "
+                ++ formatErrorPosition rowIndex
+
+
+formatErrorPosition : Int -> String
+formatErrorPosition rowIndex =
+    "at record["
+        ++ toString rowIndex
+        ++ "]"
