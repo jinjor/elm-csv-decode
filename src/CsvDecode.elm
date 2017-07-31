@@ -42,6 +42,9 @@ import Dict exposing (Dict)
 import Csv
 
 
+-- TYPES
+
+
 {-| Type of decoders. For example, `Decoder Int` decodes each line into integer value.
 -}
 type Decoder a
@@ -86,6 +89,10 @@ type Column
     | Field String
 
 
+
+-- PRIMITIVES
+
+
 {-| Makes decoder that always succeeds.
 
 ```elm
@@ -122,6 +129,8 @@ fail message =
 Ok ["2"]
 ```
 
+**Note**: It succeeds only if the value is non-empty string. If you want to allow empty string, use `string`.
+
 -}
 field : String -> Decoder String
 field key =
@@ -147,6 +156,8 @@ If column names are available, use `field` instead.
 > Decode.run (index 1) "a,b,c\n1,2,3"
 Ok ["2"]
 ```
+
+**Note**: It succeeds only if the value is non-empty string. If you want to allow empty string, use `string`.
 
 -}
 index : Int -> Decoder String
@@ -317,9 +328,12 @@ float (Decoder f) =
         )
 
 
-{-| TODO
+{-| Allows empty string. Without this, empty value causes failure.
 
 ```elm
+> Decode.run (field "b") "a,b,c\n1,,3"
+Err "unexpected empty value in record[0]"
+
 > Decode.run (string (field "b")) "a,b,c\n1,,3"
 Ok [""]
 ```
@@ -338,14 +352,33 @@ string (Decoder f) =
         )
 
 
-{-| TODO
+{-| If value exists, it will be wrapped with `Just`. If not, `Nothing` will be returned.
+
+There are several situations where `Nothing` can be returned.
 
 ```elm
-> Decode.run (optional (int (field "b"))) "a,b,c\n1,2,3"
-Ok [ Just 2 ]
+> Decode.run (optional (field "b")) "a,b,c\n1,2,3"
+Ok [ Just "2" ]
 
-> Decode.run (optional (int (field "b"))) "a,b,c\n1,,3"
+-- column does not exist in *header*
+> Decode.run (optional (field "b")) "a,b,c\n1,,3"
 Ok [ Nothing ]
+
+-- column does not exist in *body*
+> Decode.run (optional (field "b")) "a,b,c\n1"
+Ok [ Nothing ]
+
+-- *value* is empty
+> Decode.run (optional (field "b")) "a,b,c\n1,,3"
+Ok [ Nothing ]
+```
+
+**Note**: Be careful if you use both `optional` and `string`.
+Empty value will be regarded as existing string and never be `Nothing`.
+
+```elm
+> Decode.run (optional (string (field "b"))) "a,b,c\n1,,3"
+Ok [ Just "" ]
 ```
 
 -}
@@ -371,7 +404,37 @@ optional (Decoder f) =
         )
 
 
-{-| -}
+{-| Makes pipeline to get multiple values from a record.
+
+For example, here is a user table:
+
+```
+id,name,age,mail
+1,John Smith,20,john@example.com
+2,Jane Smith,19,
+```
+
+You can make decoder for it like this:
+
+```elm
+type alias User =
+    { id : String
+    , name : String
+    , age : Int
+    , mail : Maybe String
+    }
+
+
+userDecoder : Decoder User
+userDecoder =
+    succeed User
+        |= field "id"
+        |= field "name"
+        |= int (field "age")
+        |= optional (field "mail")
+```
+
+-}
 (|=) : Decoder (a -> b) -> Decoder a -> Decoder b
 (|=) (Decoder transform) (Decoder f) =
     Decoder
@@ -383,7 +446,14 @@ optional (Decoder f) =
 infixl 5 |=
 
 
-{-| -}
+{-| Converts the result to another type.
+
+```
+> Decode.run (map toUpper (field "b")) "a,b,c\nfoo,bar,baz"
+Ok ["BAR"]
+```
+
+-}
 map : (a -> b) -> Decoder a -> Decoder b
 map transform (Decoder f) =
     Decoder
@@ -392,7 +462,38 @@ map transform (Decoder f) =
         )
 
 
-{-| -}
+{-| This enables to make a decoder that partially depends on its value.
+
+For example, here is a list of users:
+
+```
+type,userId,name
+guest,,
+admin,1,Tom
+```
+
+The fields "userId" and "name" is needed only when the field "type" is "admin". So you write like this:
+
+```
+type User = Guest | Admin String String
+
+userDecoder : Decoder User
+userDecoder =
+    field "type"
+        |> andThen
+            (\t ->
+                if t == "guest" then
+                    succeed Guest
+                else if t == "admin"
+                    succeed Admin
+                        |= field "userId"
+                        |= field "name"
+                else
+                    fail ("unknown type: " ++ t)
+            )
+```
+
+-}
 andThen : (a -> Decoder b) -> Decoder a -> Decoder b
 andThen toDecoder (Decoder f) =
     Decoder
@@ -430,13 +531,31 @@ decodeItemsHelp decoder header items rowIndex list =
                     Err e
 
 
-{-| -}
+{-| Runs the decoder. The result is either list of items or error message.
+
+```elm
+> Decode.run (field "b") "a,b,c\n1,2,3"
+Ok ["2"]
+```
+
+This parses the basic comma-separated CSV with header. For more advanced case, see `runWithOptions`.
+
+-}
 run : Decoder a -> String -> Result String (List a)
 run =
     runWithOptions defaultOptions
 
 
-{-| -}
+{-| The default options are defined as below.
+
+```
+defaultOptions =
+    { separator = ","
+    , noHeader = False
+    }
+```
+
+-}
 defaultOptions : Options
 defaultOptions =
     { separator = ","
@@ -444,7 +563,17 @@ defaultOptions =
     }
 
 
-{-| -}
+{-| Runs decoder with options.
+
+```elm
+> Decode.runWithOptions { separator = ";", noHeader = True } (index 1) "a;b;c"
+Ok ["b"]
+```
+
+- `separator : String` is used to separate each line into string list. Default is `,`.
+- `noHeader : Bool` is used to indicate that csv has no header. Default is `False`.
+
+-}
 runWithOptions : Options -> Decoder a -> String -> Result String (List a)
 runWithOptions options decoder source =
     let
