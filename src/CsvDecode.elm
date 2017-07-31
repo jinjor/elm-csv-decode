@@ -604,13 +604,15 @@ runWithOptions options decoder source =
             |> Result.mapError formatError
 
 
-{-| -}
+{-| Similar to `run` but does not stop executing on error. All errors will be collected.
+-}
 runAll : Decoder a -> String -> ( List a, List String )
 runAll decoder source =
     runAllWithOptions defaultOptions decoder source
 
 
-{-| -}
+{-| Execute `runAll` with options.
+-}
 runAllWithOptions : Options -> Decoder a -> String -> ( List a, List String )
 runAllWithOptions options decoder source =
     let

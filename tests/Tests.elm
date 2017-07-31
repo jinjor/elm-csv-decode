@@ -51,6 +51,26 @@ testCsvWithOptionsFail options source decoder =
                 Expect.pass
 
 
+testRunAll : String -> List a -> Int -> Decoder a -> (() -> Expectation)
+testRunAll source exp expectedErrorCount decoder =
+    \_ ->
+        let
+            ( actual, errors ) =
+                CsvDecode.runAll decoder source
+        in
+            Expect.equal ( exp, expectedErrorCount ) ( actual, List.length errors )
+
+
+testRunAllWithOptions : Options -> String -> List a -> Int -> Decoder a -> (() -> Expectation)
+testRunAllWithOptions options source exp expectedErrorCount decoder =
+    \_ ->
+        let
+            ( actual, errors ) =
+                CsvDecode.runAllWithOptions options decoder source
+        in
+            Expect.equal ( exp, expectedErrorCount ) ( actual, List.length errors )
+
+
 suite : Test
 suite =
     describe "CsvDecode"
@@ -172,6 +192,9 @@ suite =
             , test "fails if conversion fails" <|
                 testCsvFail "1,2,3\n10,foo,30" <|
                     optional (int (index 1))
+            , test "fails on accessing non-unique column" <|
+                testCsvFail "1,1,3\n10,20,30" <|
+                    optional (field "1")
             , test "results in Nothing if value is empty" <|
                 testCsv "1,2,3\n10,,30" [ Nothing ] <|
                     optional (index 1)
@@ -254,8 +277,16 @@ suite =
                         |> andThen succeed
                     )
             ]
+        , describe "run"
+            [ test "does not cause error on empty source" <|
+                testCsv "" [] <|
+                    index 1
+            ]
         , describe "runWithOptions"
-            [ test "works with custom separator" <|
+            [ test "does not cause error on empty source" <|
+                testCsvWithOptions defaultOptions "" [] <|
+                    index 1
+            , test "works with custom separator" <|
                 testCsvWithOptions
                     { separator = ";"
                     , noHeader = False
@@ -281,6 +312,29 @@ suite =
                     "a,b,c\nd,e,f"
                 <|
                     field "dummy"
+            ]
+        , describe "runAll"
+            [ test "does not cause error on empty source" <|
+                testRunAll "" [] 0 <|
+                    index 1
+            , test "collect errors correctly" <|
+                testRunAll "a,b\n1,2\n3,foo\n4,\n5" [ 2 ] 3 <|
+                    int (index 1)
+            , test "collect errors correctly 2" <|
+                testRunAll "a,b\n1,2\n3,foo\n4,\n5" [ Just 2, Nothing, Nothing ] 1 <|
+                    optional (int (field "b"))
+            , test "collect errors correctly 3" <|
+                testRunAll "a,b\n1,2\n3,foo\n4,\n5" [] 4 <|
+                    int (field "c")
+            , test "collect errors correctly 4" <|
+                testRunAll "a,b\n1,2\n3,foo\n4,\n5" [ Nothing, Nothing, Nothing, Nothing ] 0 <|
+                    optional (int (field "c"))
+            , test "collect errors correctly 5" <|
+                testRunAll "b,b\n1,2\n3,foo\n4,\n5" [] 4 <|
+                    int (field "b")
+            , test "collect errors correctly 6" <|
+                testRunAll "b,b\n1,2\n3,foo\n4,\n5" [] 4 <|
+                    optional (int (field "b"))
             ]
         ]
 
