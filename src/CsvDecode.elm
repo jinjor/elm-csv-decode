@@ -58,7 +58,8 @@ type Error
     | ColumnNotFoundInBody Int Int (Maybe String)
     | EmptyValue Int String
     | InvalidDataType Int String
-    | AmbiguousField Int String
+    | AmbiguousFieldToAccess Int String
+    | AmbiguousFieldToReturn Int String
     | Fail Int String
 
 
@@ -142,7 +143,7 @@ field key =
                 |> Maybe.map
                     (\index ->
                         if index == -1 then
-                            Err (AmbiguousField rowIndex key)
+                            Err (AmbiguousFieldToAccess rowIndex key)
                         else
                             getByIndex rowIndex (ColumnNotFoundInBody rowIndex index (Just key)) item index
                     )
@@ -191,7 +192,7 @@ fieldsAfter key =
         (\header rowIndex item ->
             case Dict.get key header.nameToIndex of
                 Just -1 ->
-                    Err (AmbiguousField rowIndex key)
+                    Err (AmbiguousFieldToAccess rowIndex key)
 
                 Just index ->
                     makeDictInRange (\i -> i > index) header rowIndex item
@@ -224,10 +225,10 @@ fieldsBetween key1 key2 =
         (\header rowIndex item ->
             case ( Dict.get key1 header.nameToIndex, Dict.get key2 header.nameToIndex ) of
                 ( Just -1, Just _ ) ->
-                    Err (AmbiguousField rowIndex key1)
+                    Err (AmbiguousFieldToAccess rowIndex key1)
 
                 ( Just _, Just -1 ) ->
-                    Err (AmbiguousField rowIndex key2)
+                    Err (AmbiguousFieldToAccess rowIndex key2)
 
                 ( Just index1, Just index2 ) ->
                     makeDictInRange (\i -> i > index1 && i < index2) header rowIndex item
@@ -264,7 +265,7 @@ makeDictInRangeHelp rowIndex dict list =
 
         ( key, value ) :: rest ->
             if Dict.member key dict then
-                Err (AmbiguousField rowIndex key)
+                Err (AmbiguousFieldToReturn rowIndex key)
             else
                 makeDictInRangeHelp rowIndex (Dict.insert key value dict) rest
 
@@ -484,7 +485,7 @@ userDecoder =
             (\t ->
                 if t == "guest" then
                     succeed Guest
-                else if t == "admin"
+                else if t == "admin" then
                     succeed Admin
                         |= field "userId"
                         |= field "name"
@@ -712,10 +713,16 @@ formatError e =
                 ++ " "
                 ++ formatErrorPosition rowIndex
 
-        AmbiguousField rowIndex key ->
-            "ambiguous field '"
+        AmbiguousFieldToAccess rowIndex key ->
+            "accessed field '"
                 ++ key
-                ++ "' was accessed "
+                ++ "' is ambiguous "
+                ++ formatErrorPosition rowIndex
+
+        AmbiguousFieldToReturn rowIndex key ->
+            "field '"
+                ++ key
+                ++ "' is duplicated "
                 ++ formatErrorPosition rowIndex
 
         Fail rowIndex s ->

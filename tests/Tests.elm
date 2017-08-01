@@ -116,6 +116,9 @@ suite =
             [ test "works" <|
                 testCsv "1,2,3\na,b,c" [ Dict.fromList [ ( "2", "b" ), ( "3", "c" ) ] ] <|
                     fieldsAfter "1"
+            , test "still works if value is empty" <|
+                testCsv "1,2,3\na,,c" [ Dict.fromList [ ( "2", "" ), ( "3", "c" ) ] ] <|
+                    fieldsAfter "1"
             , test "fails if passed field does not exist" <|
                 testCsvFail "1,2,3\na,b,c" <|
                     fieldsAfter "4"
